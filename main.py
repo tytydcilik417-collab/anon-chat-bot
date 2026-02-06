@@ -26,6 +26,16 @@ def stop_chat_markup():
     markup.add(types.InlineKeyboardButton("❌ Berhenti / Next", callback_data="stop"))
     return markup
 
+def stop_reply_markup():
+    # resize_keyboard=True bikin tombolnya gak segede gaban (proporsional)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add(types.KeyboardButton("❌ Stop / Next"))
+    return markup
+
+def remove_keyboard():
+    # Untuk menghapus reply keyboard saat balik ke menu utama
+    return types.ReplyKeyboardRemove()
+
 # --- LOGIKA BOT ---
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -47,9 +57,10 @@ def handle_callback(call):
                 u1 = waiting_room.pop(0)
                 u2 = waiting_room.pop(0)
                 active_chats[u1], active_chats[u2] = u2, u1
-                
-                bot.send_message(u1, "✅ Terhubung!", reply_markup=stop_chat_markup())
-                bot.send_message(u2, "✅ Terhubung!", reply_markup=stop_chat_markup())
+    
+    # Kirim pesan dengan Reply Keyboard (tombol di bawah)
+                bot.send_message(u1, "✅ Terhubung! Gunakan tombol di bawah untuk berhenti.", reply_markup=stop_reply_markup())
+                bot.send_message(u2, "✅ Terhubung! Gunakan tombol di bawah untuk berhenti.", reply_markup=stop_reply_markup())
         else:
             bot.answer_callback_query(call.id, "Kamu sudah dalam antrean atau chat!")
 
@@ -62,6 +73,24 @@ def handle_callback(call):
         elif user_id in waiting_room:
             waiting_room.remove(user_id)
             bot.edit_message_text("Batal mencari.", user_id, call.message.message_id, reply_markup=main_menu_markup())
+
+# --- HANDLER UNTUK TOMBOL REPLY ---
+@bot.message_handler(func=lambda message: message.text == "❌ Stop / Next")
+def handle_stop_button(message):
+    user_id = message.chat.id
+    partner_id = active_chats.pop(user_id, None)
+    
+    if partner_id:
+        active_chats.pop(partner_id, None)
+        # Hapus reply keyboard dan kasih tombol Inline cari lagi
+        bot.send_message(user_id, "Obrolan dihentikan.", reply_markup=remove_keyboard())
+        bot.send_message(user_id, "Mau cari lagi?", reply_markup=main_menu_markup())
+        
+        bot.send_message(partner_id, "Partner memutus chat.", reply_markup=remove_keyboard())
+        bot.send_message(partner_id, "Mau cari lagi?", reply_markup=main_menu_markup())
+    else:
+        bot.send_message(user_id, "Kamu tidak sedang dalam obrolan.", reply_markup=remove_keyboard())
+        
 
 @bot.message_handler(content_types=['text', 'photo', 'sticker', 'voice', 'video'])
 def relay_message(message):
